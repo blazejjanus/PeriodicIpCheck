@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34607.119
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PeriodicIpCheck", "PeriodicIpCheck\PeriodicIpCheck.csproj", "{775FC7C9-D1F7-4DE6-95C1-085B442B147B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{775FC7C9-D1F7-4DE6-95C1-085B442B147B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{775FC7C9-D1F7-4DE6-95C1-085B442B147B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{775FC7C9-D1F7-4DE6-95C1-085B442B147B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{775FC7C9-D1F7-4DE6-95C1-085B442B147B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4417AC75-562E-4E7D-A4FF-246318E586CC}
+	EndGlobalSection
+EndGlobal
