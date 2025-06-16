@@ -1,0 +1,10 @@
+{
+  "ResultsFilePath": "ip_stats.txt",
+  "LogFilePath": "ip_stats.log",
+  "LogOnlyChanges": true,
+  "NotificationEmail": "email_to_send_notifications",
+  "SmtpServer": "server_address",
+  "SmtpPort": 587,
+  "SenderEmail": "sender_email",
+  "SenderPassword": "sender_password"
+}
