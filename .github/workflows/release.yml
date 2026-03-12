@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 jobs:
   bump-version-and-release:
     runs-on: ubuntu-latest
