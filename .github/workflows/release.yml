@@ -3,11 +3,10 @@ name: Version Bump and Release
 on:
   push:
     branches:
-      - main
       - master
 
 concurrency:
-  group: release-main
+  group: release
   cancel-in-progress: false
 
 jobs:
@@ -24,7 +23,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: main
+          ref: master
 
       - name: Read current version
         id: read_version
