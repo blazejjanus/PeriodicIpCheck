@@ -1,0 +1,103 @@
+name: Version Bump and Release
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  bump-version-and-release:
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Read current version
+        id: read_version
+        run: |
+          VERSION=$(grep -oP '(?<=<Version>)[^<]+' PeriodicIpCheck/PeriodicIpCheck.csproj)
+          echo "current_version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Bump patch version
+        id: bump_version
+        run: |
+          CURRENT="${{ steps.read_version.outputs.current_version }}"
+          IFS='.' read -r -a parts <<< "$CURRENT"
+          MAJOR="${parts[0]}"
+          MINOR="${parts[1]}"
+          PATCH="${parts[2]}"
+          NEW_PATCH=$((PATCH + 1))
+          NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Update version in csproj
+        run: |
+          NEW_VERSION="${{ steps.bump_version.outputs.new_version }}"
+          sed -i "s|<Version>[^<]*</Version>|<Version>$NEW_VERSION</Version>|g" PeriodicIpCheck/PeriodicIpCheck.csproj
+          sed -i "s|<FileVersion>[^<]*</FileVersion>|<FileVersion>$NEW_VERSION</FileVersion>|g" PeriodicIpCheck/PeriodicIpCheck.csproj
+          sed -i "s|<AssemblyVersion>[^<]*</AssemblyVersion>|<AssemblyVersion>$NEW_VERSION</AssemblyVersion>|g" PeriodicIpCheck/PeriodicIpCheck.csproj
+
+      - name: Commit and push version bump
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add PeriodicIpCheck/PeriodicIpCheck.csproj
+          git commit -m "chore: bump version to ${{ steps.bump_version.outputs.new_version }}"
+          git push
+
+      - name: Create and push git tag
+        run: |
+          TAG="v${{ steps.bump_version.outputs.new_version }}"
+          git tag "$TAG"
+          git push origin "$TAG"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish Windows self-contained executable
+        run: |
+          dotnet publish PeriodicIpCheck/PeriodicIpCheck.csproj \
+            -c Release \
+            -r win-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -o ./publish/windows
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.bump_version.outputs.new_version }}"
+          name: "Release v${{ steps.bump_version.outputs.new_version }}"
+          files: ./publish/windows/PeriodicIpCheck.exe
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image to GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: PeriodicIpCheck/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/periodicipcheck:latest
+            ghcr.io/${{ github.repository_owner }}/periodicipcheck:v${{ steps.bump_version.outputs.new_version }}
