@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".github/workflows/nuget_update.yml" />
+    <File Path=".github/workflows/release.yml" />
+  </Folder>
+  <Project Path="PeriodicIpCheck/PeriodicIpCheck.csproj" />
+</Solution>
