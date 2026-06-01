@@ -1,0 +1,179 @@
+name: NuGet Update
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: backend-nuget-update
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  SOLUTION_PATH: PeriodicIpCheck.slnx
+
+jobs:
+  nuget_update:
+    name: Update NuGet Packages
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.repository.is_template }}
+
+    steps:
+      - name: Generate GitHub App Token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.generate_token.outputs.token }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install dotnet-outdated tool
+        run: dotnet tool install --global dotnet-outdated-tool
+
+      - name: Update NuGet packages to latest stable versions
+        id: update_packages
+        shell: pwsh
+        run: |
+          $updateOutputFile = Join-Path $env:RUNNER_TEMP "update_output.txt"
+
+          dotnet outdated $env:SOLUTION_PATH --upgrade --version-lock None --pre-release Never 2>&1 | Tee-Object -Variable updateOutput
+          $updateOutput | Out-File -FilePath $updateOutputFile -Encoding utf8NoBOM
+          "UPDATE_OUTPUT_FILE=$updateOutputFile" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          $changed = git diff --name-only
+          if ($changed) {
+            "PACKAGES_UPDATED=true" | Out-File -FilePath $env:GITHUB_ENV -Append
+            Write-Host "Updated packages in files: $changed"
+          } else {
+            "PACKAGES_UPDATED=false" | Out-File -FilePath $env:GITHUB_ENV -Append
+            Write-Host "No packages were updated."
+          }
+
+      - name: Restore after update
+        if: env.PACKAGES_UPDATED == 'true'
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Build solution
+        if: env.PACKAGES_UPDATED == 'true'
+        run: dotnet build ${{ env.SOLUTION_PATH }} --no-restore -c Release
+
+      - name: Check for vulnerabilities
+        if: env.PACKAGES_UPDATED == 'true'
+        id: vuln_check
+        shell: pwsh
+        run: |
+          $vulnOutputFile = Join-Path $env:RUNNER_TEMP "vuln_output.txt"
+          $vulnOutput = dotnet list $env:SOLUTION_PATH package --vulnerable --include-transitive 2>&1
+          $vulnOutput | Out-File -FilePath $vulnOutputFile -Encoding utf8NoBOM
+          "VULN_OUTPUT_FILE=$vulnOutputFile" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          $hasVulnerabilities = $vulnOutput | Where-Object { $_ -match "has the following vulnerable packages" }
+          if ($hasVulnerabilities) {
+            "HAS_VULNERABILITIES=true" | Out-File -FilePath $env:GITHUB_ENV -Append
+            Write-Host "Vulnerabilities found!"
+            $vulnOutput | Write-Host
+          } else {
+            "HAS_VULNERABILITIES=false" | Out-File -FilePath $env:GITHUB_ENV -Append
+            Write-Host "No vulnerabilities found."
+          }
+
+      - name: Build PR title
+        if: env.PACKAGES_UPDATED == 'true'
+        shell: pwsh
+        run: |
+          $date = (Get-Date -Format "yyyy-MM-dd")
+          if ($env:HAS_VULNERABILITIES -eq "true") {
+            $title = "[SECURITY] chore(backend): update NuGet packages ($date)"
+          } else {
+            $title = "chore(backend): update NuGet packages ($date)"
+          }
+          "PR_TITLE=$title" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build PR body
+        if: env.PACKAGES_UPDATED == 'true'
+        shell: pwsh
+        run: |
+          $updateContent = Get-Content $env:UPDATE_OUTPUT_FILE -Raw -ErrorAction SilentlyContinue
+          $vulnContent = Get-Content $env:VULN_OUTPUT_FILE -Raw -ErrorAction SilentlyContinue
+          $prBodyFile = Join-Path $env:RUNNER_TEMP "pr_body.txt"
+
+          $lines = @(
+            '## Automated NuGet package update',
+            '',
+            'All NuGet packages in the solution have been updated to their latest available versions.',
+            '',
+            '### Updated packages',
+            '',
+            '``````',
+            $updateContent,
+            '``````'
+          )
+          $body = $lines -join "`n"
+
+          if ($env:HAS_VULNERABILITIES -eq "true") {
+            $vulnLines = @(
+              '',
+              '---',
+              '',
+              '### ⚠️ Vulnerability report',
+              '',
+              'One or more updated packages (or their transitive dependencies) contain known vulnerabilities. Please review before merging.',
+              '',
+              '``````',
+              $vulnContent,
+              '``````'
+            )
+            $body += $vulnLines -join "`n"
+          } else {
+            $body += "`n`n---`n`n✅ No known vulnerabilities detected."
+          }
+
+          $body | Out-File -FilePath $prBodyFile -Encoding utf8NoBOM
+          "PR_BODY_FILE=$prBodyFile" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Create Pull Request
+        if: env.PACKAGES_UPDATED == 'true'
+        id: cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ steps.generate_token.outputs.token }}
+          branch: chore/backend-nuget-update
+          base: ${{ github.event.repository.default_branch }}
+          delete-branch: true
+          title: ${{ env.PR_TITLE }}
+          commit-message: ${{ env.PR_TITLE }}
+          body-path: ${{ env.PR_BODY_FILE }}
+          add-paths: |
+            **/*.csproj
+          labels: |
+            automated
+            backend
+            dependencies
+          reviewers: ${{ vars.MAINTAINERS }}
+
+      - name: Add vulnerability label to PR
+        if: env.PACKAGES_UPDATED == 'true' && env.HAS_VULNERABILITIES == 'true' && steps.cpr.outputs.pull-request-number != ''
+        run: gh pr edit ${{ steps.cpr.outputs.pull-request-number }} --add-label "security"
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+
+      - name: Log result
+        shell: pwsh
+        run: |
+          if ($env:PACKAGES_UPDATED -eq "true") {
+            Write-Host "PR created/updated: ${{ steps.cpr.outputs.pull-request-url }}"
+          } else {
+            Write-Host "All NuGet packages are already up to date. No PR created."
+          }
