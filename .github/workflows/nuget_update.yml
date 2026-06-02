@@ -23,17 +23,10 @@ jobs:
     if: ${{ !github.event.repository.is_template }}
 
     steps:
-      - name: Generate GitHub App Token
-        id: generate_token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ steps.generate_token.outputs.token }}
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -148,7 +141,7 @@ jobs:
         id: cpr
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ steps.generate_token.outputs.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           branch: chore/backend-nuget-update
           base: ${{ github.event.repository.default_branch }}
           delete-branch: true
@@ -167,7 +160,7 @@ jobs:
         if: env.PACKAGES_UPDATED == 'true' && env.HAS_VULNERABILITIES == 'true' && steps.cpr.outputs.pull-request-number != ''
         run: gh pr edit ${{ steps.cpr.outputs.pull-request-number }} --add-label "security"
         env:
-          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log result
         shell: pwsh
