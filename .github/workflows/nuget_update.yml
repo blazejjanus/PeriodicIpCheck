@@ -136,12 +136,19 @@ jobs:
           $body | Out-File -FilePath $prBodyFile -Encoding utf8NoBOM
           "PR_BODY_FILE=$prBodyFile" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      - name: Generate GitHub App Token
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Create Pull Request
         if: env.PACKAGES_UPDATED == 'true'
         id: cpr
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.generate_token.outputs.token }}
           branch: chore/backend-nuget-update
           base: ${{ github.event.repository.default_branch }}
           delete-branch: true
@@ -160,7 +167,7 @@ jobs:
         if: env.PACKAGES_UPDATED == 'true' && env.HAS_VULNERABILITIES == 'true' && steps.cpr.outputs.pull-request-number != ''
         run: gh pr edit ${{ steps.cpr.outputs.pull-request-number }} --add-label "security"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
 
       - name: Log result
         shell: pwsh
