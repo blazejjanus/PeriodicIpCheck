@@ -5,9 +5,9 @@
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.0.10</Version>
-    <FileVersion>1.0.10</FileVersion>
-    <AssemblyVersion>1.0.10</AssemblyVersion>
+    <Version>1.0.11</Version>
+    <FileVersion>1.0.11</FileVersion>
+    <AssemblyVersion>1.0.11</AssemblyVersion>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
   </PropertyGroup>
 
